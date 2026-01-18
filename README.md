@@ -26,7 +26,7 @@ A Python-based tool to compare **Generative AI (Azure OpenAI)** against a **Rule
 
 3.  **Run the App**
     ```bash
-    streamlit run app.py
+    streamlit run main.py
     ```
 
 ## 📂 Input Formats
