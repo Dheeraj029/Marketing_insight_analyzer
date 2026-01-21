@@ -9,10 +9,10 @@ from dotenv import load_dotenv
 from openai import AzureOpenAI
 from prompts import ANALYSIS_PROMPT
 
-# Load env variables
+# Load environment variables
 load_dotenv()
 
-# Pricing estimates
+# Pricing estimates (USD per 1K tokens)
 INPUT_PRICE = 0.005
 OUTPUT_PRICE = 0.015
 
@@ -108,15 +108,62 @@ def ai_analysis(text, client, deployment):
 
 
 # -------------------------------
+# Conclusion Generator
+# -------------------------------
+def generate_conclusion(results):
+    baseline_score = 0
+    ai_score = 0
+
+    for item in results:
+        base = item["baseline"]
+        ai = item["azure_ai"]
+
+        if len(ai.keys()) > len(base.keys()):
+            ai_score += 1
+        else:
+            baseline_score += 1
+
+        if ai.get("recommendations"):
+            ai_score += 1
+        if base.get("recommendations"):
+            baseline_score += 1
+
+        if len(ai.get("themes", [])) > len(base.get("themes", [])):
+            ai_score += 1
+
+    if ai_score > baseline_score:
+        winner = "Azure OpenAI Analyzer"
+        reason = (
+            "Azure OpenAI provides deeper insights, contextual reasoning, "
+            "and more structured analysis compared to the rule-based baseline."
+        )
+    elif baseline_score > ai_score:
+        winner = "Baseline Analyzer"
+        reason = (
+            "The baseline analyzer performs well for simple sentiment detection "
+            "with zero cost and minimal latency."
+        )
+    else:
+        winner = "Both Perform Similarly"
+        reason = "Both analyzers show comparable effectiveness on this dataset."
+
+    return {
+        "baseline_score": baseline_score,
+        "azure_ai_score": ai_score,
+        "winner": winner,
+        "reason": reason
+    }
+
+
+# -------------------------------
 # Streamlit UI
 # -------------------------------
 def main():
     st.set_page_config(page_title="Marketing Insights Analyzer", layout="wide", page_icon="📊")
 
     st.title("📊 Marketing Insights Analyzer")
-    st.caption("Compare rule-based logic with Azure OpenAI insights")
+    st.caption("Comparison of Rule-Based Analysis vs Azure OpenAI")
 
-    # Sidebar
     with st.sidebar:
         st.header("⚙️ Configuration")
         uploaded_file = st.file_uploader("Upload Feedback File", ["csv", "txt", "json"])
@@ -156,20 +203,16 @@ def main():
                 st.info(feedback)
 
                 col1, col2 = st.columns(2)
-
                 with col1:
                     st.subheader("🤖 Baseline Analysis")
                     st.json(baseline)
-
                 with col2:
                     st.subheader("✨ Azure AI Analysis")
                     st.json(ai_result)
 
         st.success("✅ Analysis completed")
 
-        # -------------------------------
-        # Download JSON Results
-        # -------------------------------
+        # Download JSON
         json_output = json.dumps(results, indent=2)
         st.download_button(
             label="📥 Download Results as JSON",
@@ -178,8 +221,22 @@ def main():
             mime="application/json"
         )
 
-    elif not uploaded_file:
-        st.info("👈 Upload a file to begin analysis")
+        # Conclusion
+        st.divider()
+        st.subheader("🏁 Final Conclusion")
+
+        conclusion = generate_conclusion(results)
+
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Baseline Score", conclusion["baseline_score"])
+        c2.metric("Azure AI Score", conclusion["azure_ai_score"])
+        c3.metric("Winner", conclusion["winner"])
+
+        st.success(f"🏆 Best Performer: {conclusion['winner']}")
+        st.write(conclusion["reason"])
+
+    else:
+        st.info("👈 Upload a file and click **Run Analysis** to begin")
 
 
 if __name__ == "__main__":
